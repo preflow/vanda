@@ -1,0 +1,38 @@
+version: '2'
+services:
+  db:
+    image: postgres:17
+    container_name: db_vanda
+    user: root
+    environment:
+      - POSTGRES_USER=odoo
+      - POSTGRES_PASSWORD=vanda@2025
+      - POSTGRES_DB=postgres
+    restart: always             # run as a service
+    volumes:
+        - ./postgresql:/var/lib/postgresql/data
+
+  vanda:
+    image: odoo:18
+    container_name: vanda
+    user: root
+    depends_on:
+      - db
+    ports:
+      - "18018:8069"
+      # - "28018:8072" # live chat
+    tty: true
+    command: --
+    environment:
+      - HOST=db
+      - USER=odoo
+      - PASSWORD=vanda@2025
+      - PIP_BREAK_SYSTEM_PACKAGES=1
+    volumes:
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+      - ./entrypoint.sh:/entrypoint.sh   # if you want to install additional Python packages, uncomment this line!
+      - ./addons:/mnt/extra-addons
+      - ./etc:/etc/odoo
+    restart: always             # run as a service
+    

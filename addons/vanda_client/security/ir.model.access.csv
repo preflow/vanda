@@ -1,0 +1,3 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_vanda_client_user,access_vanda_client_user,model_vanda_client,base.group_user,1,1,1,1
+access_vanda_client_file_user,access_vanda_client_file_user,model_vanda_client_file,base.group_user,1,1,1,1

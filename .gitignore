@@ -1,3 +1,12 @@
+# Vanda
+etc/addons
+etc/filestore
+etc/sessions
+postgresql/*
+draft/timescaledb/*
+*.log
+draft/*
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

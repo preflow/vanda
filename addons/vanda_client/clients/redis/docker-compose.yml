@@ -1,0 +1,46 @@
+version: '3.3'
+services:
+    redis:
+        image: redis:6.2.5-alpine
+        container_name: "mstats_redis"
+        # ports:    # should not expose redis port to public
+        # - "6379:6379"
+        networks:
+        - redis_network
+        restart: unless-stopped     # "unless-stopped" or "always"
+        ## UNCOMMENT THESE LINES IF WE USE CUSTOM REDIS CONFIG ##
+        volumes:
+        - ./redis.conf:/usr/local/etc/redis/redis.conf    
+        - ./data:/data
+        command: ["redis-server", "/usr/local/etc/redis/redis.conf"]
+        
+    api:
+        image: python:3.8
+        #user: $(id -u ${USER}):$(id -u ${USER}) #root
+        container_name: mstats_api
+        ipc: host
+        tty: true
+        volumes:
+            - $PWD:/usr/src/myapp/
+        depends_on:
+            - redis
+        ports:
+            - 7000:8000
+        networks:
+            - redis_network
+        environment:
+            - REDIS_HOST=redis
+            - REDIS_PORT=6379
+            - REDIS_DB=0
+            - REDIS_PASS=minhng#info@21
+            - NUM_REDIS_CLIENTS=8
+            - IS_PRODUCTION=1
+        working_dir: /usr/src/myapp/
+        # command: /bin/sh -c "while true; do sleep 5m; done"
+        command: /bin/sh -c "cd /usr/src/myapp/ && pip3 install -r requirements.txt && python3 main.py"
+        restart: unless-stopped     # or "always"
+
+networks:
+    redis_network:
+        external:
+            name: redis-network
