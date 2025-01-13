@@ -1,7 +1,9 @@
 # -*- coding: utf-8 -*-
 import os
 import base64
-from jinja2 import Template
+from jinja2 import Template, Environment, FileSystemLoader, TemplateSyntaxError
+import hashlib
+import plazy
 
 from odoo import api, fields, models, tools, _
 from odoo.exceptions import UserError, ValidationError
@@ -10,6 +12,49 @@ import logging
 _logger = logging.getLogger(__name__)
 
 # -------------------------
+def is_jinja2_template(file_path):
+    # Check if the file exists
+    if not os.path.isfile(file_path):
+        return False, "File does not exist."
+    
+    try:
+        # Create a Jinja2 environment and load the template
+        env = Environment(loader=FileSystemLoader(os.path.dirname(file_path)))
+        template_name = os.path.basename(file_path)
+        template = env.get_template(template_name)  # Load the template
+        
+        # Check if the file contains Jinja2-specific syntax
+        if any(["{{" in template.source, "{%" in template.source, "{#" in template.source]):
+            return True, "Valid Jinja2 template."
+        return False, "No Jinja2-specific syntax found, but file is valid."
+    except TemplateSyntaxError as e:
+        return False, f"TemplateSyntaxError: {e.message} at line {e.lineno}."
+    except Exception as e:
+        return False, f"Error: {e}"
+
+def calculate_md5(file_path):
+    # Create an md5 hash object
+    md5_hash = hashlib.md5()
+    
+    # Open the file in binary mode and read chunks of it
+    with open(file_path, 'rb') as f:
+        for chunk in iter(lambda: f.read(4096), b""):
+            md5_hash.update(chunk)
+    
+    # Return the hexadecimal digest of the hash
+    return md5_hash.hexdigest()
+
+def file_to_base64(file_path):
+    # Open the file in binary mode
+    with open(file_path, "rb") as file:
+        # Read the file's contents
+        file_content = file.read()
+        
+    # Encode the file's contents in base64
+    base64_encoded = base64.b64encode(file_content)
+    
+    # Convert the base64 bytes to a string and return
+    return base64_encoded.decode('utf-8')
 
 # Decode base64 string to text
 def base64_to_text(base64_string):
@@ -62,7 +107,7 @@ class VandaClient(models.Model):
     name = fields.Char(required=True)   # Redis Connector
     code = fields.Char(required=True)   # redis (client name in "./clients")
     image = fields.Image(string="Image", max_width=256, max_height=256)
-    file_ids = fields.Many2many('vanda.client.file', 'vanda_client_file_rel', string='Files')
+    file_ids = fields.One2many('vanda.client.file', 'vanda_client_id', string='Files')
 
     @api.model
     def create(self, vals):
@@ -103,20 +148,67 @@ class VandaClient(models.Model):
         return result
 
     @api.model
-    def reload_vanda_client_files(self):
+    def sync_src_files(self):
         clients_dir = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "../clients"))
         child_folders = [f for f in os.listdir(clients_dir) if os.path.isdir(os.path.join(clients_dir, f))]     # redis, postgres, ...
-        _logger.info(f"Reload files {child_folders} in directory: {clients_dir}")
+        _logger.info(f"Sync src files {child_folders} in directory: {clients_dir}")
         files = plazy.list_files(root=clients_dir,
                             filter_func=lambda x : False if x.count('__pycache__')>=1 else True,
                             is_include_root=False)  # ["redis/docker-compose.yml", ...]
-        for childf in child_folders: # redis
-            vanda_client = self.search([('code', '=', childf)], limit=1)
+        for client_name in child_folders: # redis
+            vanda_client = self.search([('code', '=', client_name)], limit=1)
+            client_files_on_disk = [f for f in files if f.startswith(client_name)]
             if vanda_client:
-                # clear old files
-                # SYNC...TODO
-                # vanda_client.file_ids
+                vanda_client_files = vanda_client.file_ids.mapped('name')
+                files_insert = list(set(client_files_on_disk) - set(vanda_client_files))
+                files_del = list(set(vanda_client_files) - set(client_files_on_disk))
+                files_update = [f for f in client_files_on_disk if f in vanda_client_files]
+                if files_insert:
+                    values = []
+                    for fi in files_insert:
+                        file_path = os.path.join(clients_dir, fi)
+                        # name = fields.Char('Name', required=True)  # relative path. E.g. redis/docker-compose.yml
+                        # md5_hash = fields.Char('MD5 Hash', required=True)    
+                        # bin_content = fields.Binary("Bin Content", attachment=True)
+                        # is_template = fields.Boolean("Is Template", default=False)
+                        # vanda_client_id = fields.Many2one('vanda.client', string="Vanda Client", required=True, ondelete='cascade')
+                        values.append({
+                            "name": fi,     # redis/docker-compose.yml
+                            "md5_hash": calculate_md5(file_path=file_path),
+                            "bin_content": file_to_base64(file_path=file_path),
+                            "is_template": is_jinja2_template(file_path=file_path)[0],
+                            "vanda_client_id": vanda_client.id,
+                        })
+                    new_recs = self.env["vanda.client.file"].create(values)
+                    _logger.info(f"[vanda.client.sync_src_files] Created remote files: {files_insert} => {new_recs}")
+                    pass
+
+                if files_del:
+                    f2del = self.env["vanda.client.file"].search([("vanda_client_id", "=", vanda_client.id), ("name", "in", files_del)])
+                    _logger.info(f"[vanda.client.sync_src_files] Deleted remote files: {files_del} => {f2del}")
+                    f2del.unlink()
+                    pass
+
+                if files_update:
+                    f2update = self.env["vanda.client.file"].search([("vanda_client_id", "=", vanda_client.id), ("name", "in", files_update)])
+                    for f2up in f2update:
+                        local_file_path = os.path.join(clients_dir, f2up.name)
+                        local_file_md5_hash = calculate_md5(file_path=local_file_path)
+                        updated_file_names = []
+                        if local_file_md5_hash == f2up.md5_hash:
+                            # matching md5 hash => do nothing
+                            pass
+                        else:
+                            # update the content of the remote file
+                            f2up.update({
+                                "md5_hash": local_file_md5_hash,
+                                "bin_content": file_to_base64(file_path=local_file_path),
+                                "is_template": is_jinja2_template(file_path=local_file_path)[0],
+                            })
+                            updated_file_names.append(f2up.name)
+                        _logger.info(f"[vanda.client.sync_src_files] Updated remote files: {updated_file_names}")
+                        pass
+                    pass
                 pass
             pass
         pass
-    

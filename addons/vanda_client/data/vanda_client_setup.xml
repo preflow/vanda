@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
     <data noupdate="0">
-        <function model="vanda.client" name="reload_vanda_client_files"/>
+        <function model="vanda.client" name="sync_src_files"/>
     </data>
 </odoo>

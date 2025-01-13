@@ -30,7 +30,7 @@
                                     <control>
                                         <create name="add_line_control" string="Add a file"/>
                                     </control>
-                                    <!-- <field name="id"/> -->
+                                    <field name="id"/>
                                     <field name="name" readonly="1"/>
                                     <field name="is_template" readonly="1"/>
                                     <!-- <field name="file_type" readonly="1"/> -->
