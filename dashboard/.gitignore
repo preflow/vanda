@@ -1,13 +1,11 @@
 # Vanda
-supabase/volumes/db/data
-
-dashboard/etc/addons
-dashboard/etc/filestore
-dashboard/etc/sessions
-dashboard/postgresql/*
-dashboard/draft/timescaledb/*
+etc/addons
+etc/filestore
+etc/sessions
+postgresql/*
+draft/timescaledb/*
 *.log
-dashboard/draft/*
+draft/*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
