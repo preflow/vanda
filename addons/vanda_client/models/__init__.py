@@ -1,1 +1,1 @@
-from . import vanda_client
+from . import vanda_connector

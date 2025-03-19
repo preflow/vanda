@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <odoo>
     <data>
-        <record id="vanda_client_form_view" model="ir.ui.view">
-            <field name="name">vanda_client_form_view</field>
-            <field name="model">vanda.client</field>
+        <record id="vanda_connector_form_view" model="ir.ui.view">
+            <field name="name">vanda_connector_form_view</field>
+            <field name="model">vanda.connector</field>
             <field name="arch" type="xml">
                 <form create="0" delete="0">
                     <header>                    
@@ -23,7 +23,7 @@
                             </group>
                         </group>
                         <group name="files" string="Files">
-                            <label for="file_ids" colspan="2" string='Files are loaded from "addons/vanda_client/clients/CODE/*"'/>
+                            <label for="file_ids" colspan="2" string='Files are loaded from "addons/vanda_connector/connectors/CODE/*"'/>
                             <!-- <field name="file_ids" colspan="2" nolabel="1" domain="[('file_type', '=', 'built')]" delete="0" create="0" context="{'search_default_file_type': 'built'}"> -->
                             <field name="file_ids" colspan="2" nolabel="1" readonly="1">
                                 <list string="Files" editable="bottom" limit="15" default_order="create_date desc" delete="0" create="0">
@@ -46,11 +46,11 @@
             </field>
         </record>
 
-        <record id="vanda_client_tree_view" model="ir.ui.view">
-            <field name="name">vanda_client_tree_view</field>
-            <field name="model">vanda.client</field>
+        <record id="vanda_connector_tree_view" model="ir.ui.view">
+            <field name="name">vanda_connector_tree_view</field>
+            <field name="model">vanda.connector</field>
             <field name="arch" type="xml">
-                <list string="Clients" default_order="name asc" create="0" delete="0">
+                <list string="Connectors" default_order="name asc" create="0" delete="0">
                     <field name="image" widget="image" options='{"size": [64, 64]}'/>
                     <field name="name"/>
                     <field name="code"/>
@@ -74,14 +74,14 @@
             </field>
         </record> -->
         
-        <record id="action_vanda_client" model="ir.actions.act_window">
-            <field name="name">Clients</field>
+        <record id="action_vanda_connector" model="ir.actions.act_window">
+            <field name="name">Connectors</field>
             <field name="type">ir.actions.act_window</field>
-            <field name="res_model">vanda.client</field>
+            <field name="res_model">vanda.connector</field>
             <!-- <field name="search_view_id" ref="zoo_animal_filter"/> -->
             <field name="view_ids" eval="[(5, 0, 0),
-                (0, 0, {'view_mode': 'list', 'view_id': ref('vanda_client_tree_view')}),
-                (0, 0, {'view_mode': 'form', 'view_id': ref('vanda_client_form_view')})]"/>
+                (0, 0, {'view_mode': 'list', 'view_id': ref('vanda_connector_tree_view')}),
+                (0, 0, {'view_mode': 'form', 'view_id': ref('vanda_connector_form_view')})]"/>
         </record>
 
         <menuitem id="menu_vanda"
@@ -89,9 +89,9 @@
             sequence="10"
             groups="base.group_user"/>
         
-        <menuitem id="menu_vanda_client"
-            name="Clients"
-            action="action_vanda_client"
+        <menuitem id="menu_vanda_connector"
+            name="Connectors"
+            action="action_vanda_connector"
             sequence="40"
             parent="menu_vanda"
             groups="base.group_user"/>        

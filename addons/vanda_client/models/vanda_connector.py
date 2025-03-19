@@ -16,13 +16,13 @@ def is_jinja2_template(file_path):
     # Check if the file exists
     if not os.path.isfile(file_path):
         return False, "File does not exist."
-    
+
     try:
         # Create a Jinja2 environment and load the template
         env = Environment(loader=FileSystemLoader(os.path.dirname(file_path)))
         template_name = os.path.basename(file_path)
         template = env.get_template(template_name)  # Load the template
-        
+
         # Check if the file contains Jinja2-specific syntax
         if any(["{{" in template.source, "{%" in template.source, "{#" in template.source]):
             return True, "Valid Jinja2 template."
@@ -35,12 +35,12 @@ def is_jinja2_template(file_path):
 def calculate_md5(file_path):
     # Create an md5 hash object
     md5_hash = hashlib.md5()
-    
+
     # Open the file in binary mode and read chunks of it
     with open(file_path, 'rb') as f:
         for chunk in iter(lambda: f.read(4096), b""):
             md5_hash.update(chunk)
-    
+
     # Return the hexadecimal digest of the hash
     return md5_hash.hexdigest()
 
@@ -49,10 +49,10 @@ def file_to_base64(file_path):
     with open(file_path, "rb") as file:
         # Read the file's contents
         file_content = file.read()
-        
+
     # Encode the file's contents in base64
     base64_encoded = base64.b64encode(file_content)
-    
+
     # Convert the base64 bytes to a string and return
     return base64_encoded.decode('utf-8')
 
@@ -88,26 +88,26 @@ def process_base64_jinja2(base64_string, context):
 
 # -------------------------
 
-class VandaClientFile(models.Model):
-    _name = "vanda.client.file"
-    _description = "Vanda Client File"
+class VandaConnectorFile(models.Model):
+    _name = "vanda.connector.file"
+    _description = "Vanda Connector File"
 
     name = fields.Char('Name', required=True)  # relative path. E.g. redis/docker-compose.yml
     md5_hash = fields.Char('MD5 Hash', required=True)    
     bin_content = fields.Binary("Bin Content", attachment=True)
     is_template = fields.Boolean("Is Template", default=False)
-    vanda_client_id = fields.Many2one('vanda.client', string="Vanda Client", required=True, ondelete='cascade')
+    vanda_connector_id = fields.Many2one('vanda.connector', string="Vanda Connector", required=True, ondelete='cascade')
 
 # -------------------------
 
-class VandaClient(models.Model):
-    _name = "vanda.client"
-    _description = "Vanda Client"
+class VandaConnector(models.Model):
+    _name = "vanda.connector"
+    _description = "Vanda Connector"
 
     name = fields.Char(required=True)   # Redis Connector
-    code = fields.Char(required=True)   # redis (client name in "./clients")
+    code = fields.Char(required=True)   # redis (connector name in "./connectors")
     image = fields.Image(string="Image", max_width=256, max_height=256)
-    file_ids = fields.One2many('vanda.client.file', 'vanda_client_id', string='Files')
+    file_ids = fields.One2many('vanda.connector.file', 'vanda_connector_id', string='Files')
 
     @api.model
     def create(self, vals):
@@ -119,12 +119,12 @@ class VandaClient(models.Model):
         exist_record = self.search([("name", "=", record_name)], limit=1)
         if exist_record:
             raise ValidationError("Duplicated ID: %s" % record_name)
-        return super(VandaClient, self).create(vals)
+        return super(VandaConnector, self).create(vals)
 
     @api.model
     def render_files(self, id):
-        vanda_client = self.browse(id)
-        file_records = vanda_client.file_ids
+        vanda_connector = self.browse(id)
+        file_records = vanda_connector.file_ids
         result = [
             # {"path": "redis/abc.py", "bin_content": "<base64>"}
         ]
@@ -135,7 +135,7 @@ class VandaClient(models.Model):
                 bin_content = process_base64_jinja2(
                     base64_string=bin_content.decode("utf-8"), # base64 byte to string
                     context={
-                        "vanda_client": vanda_client
+                        "vanda_connector": vanda_connector
                     }
                 )
                 pass
@@ -149,50 +149,50 @@ class VandaClient(models.Model):
 
     @api.model
     def sync_src_files(self):
-        clients_dir = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "../clients"))
-        child_folders = [f for f in os.listdir(clients_dir) if os.path.isdir(os.path.join(clients_dir, f))]     # redis, postgres, ...
-        _logger.info(f"Sync src files {child_folders} in directory: {clients_dir}")
-        files = plazy.list_files(root=clients_dir,
+        connectors_dir = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "../connectors"))
+        child_folders = [f for f in os.listdir(connectors_dir) if os.path.isdir(os.path.join(connectors_dir, f))]     # redis, postgres, ...
+        _logger.info(f"Sync src files {child_folders} in directory: {connectors_dir}")
+        files = plazy.list_files(root=connectors_dir,
                             filter_func=lambda x : False if x.count('__pycache__')>=1 else True,
                             is_include_root=False)  # ["redis/docker-compose.yml", ...]
-        for client_name in child_folders: # redis
-            vanda_client = self.search([('code', '=', client_name)], limit=1)
-            client_files_on_disk = [f for f in files if f.startswith(client_name)]
-            if vanda_client:
-                vanda_client_files = vanda_client.file_ids.mapped('name')
-                files_insert = list(set(client_files_on_disk) - set(vanda_client_files))
-                files_del = list(set(vanda_client_files) - set(client_files_on_disk))
-                files_update = [f for f in client_files_on_disk if f in vanda_client_files]
+        for connector_name in child_folders: # redis
+            vanda_connector = self.search([('code', '=', connector_name)], limit=1)
+            connector_files_on_disk = [f for f in files if f.startswith(connector_name)]
+            if vanda_connector:
+                vanda_connector_files = vanda_connector.file_ids.mapped('name')
+                files_insert = list(set(connector_files_on_disk) - set(vanda_connector_files))
+                files_del = list(set(vanda_connector_files) - set(connector_files_on_disk))
+                files_update = [f for f in connector_files_on_disk if f in vanda_connector_files]
                 if files_insert:
                     values = []
                     for fi in files_insert:
-                        file_path = os.path.join(clients_dir, fi)
+                        file_path = os.path.join(connectors_dir, fi)
                         # name = fields.Char('Name', required=True)  # relative path. E.g. redis/docker-compose.yml
                         # md5_hash = fields.Char('MD5 Hash', required=True)    
                         # bin_content = fields.Binary("Bin Content", attachment=True)
                         # is_template = fields.Boolean("Is Template", default=False)
-                        # vanda_client_id = fields.Many2one('vanda.client', string="Vanda Client", required=True, ondelete='cascade')
+                        # vanda_connector_id = fields.Many2one('vanda.connector', string="Vanda Connector", required=True, ondelete='cascade')
                         values.append({
                             "name": fi,     # redis/docker-compose.yml
                             "md5_hash": calculate_md5(file_path=file_path),
                             "bin_content": file_to_base64(file_path=file_path),
                             "is_template": is_jinja2_template(file_path=file_path)[0],
-                            "vanda_client_id": vanda_client.id,
+                            "vanda_connector_id": vanda_connector.id,
                         })
-                    new_recs = self.env["vanda.client.file"].create(values)
-                    _logger.info(f"[vanda.client.sync_src_files] Created remote files: {files_insert} => {new_recs}")
+                    new_recs = self.env["vanda.connector.file"].create(values)
+                    _logger.info(f"[vanda.connector.sync_src_files] Created remote files: {files_insert} => {new_recs}")
                     pass
 
                 if files_del:
-                    f2del = self.env["vanda.client.file"].search([("vanda_client_id", "=", vanda_client.id), ("name", "in", files_del)])
-                    _logger.info(f"[vanda.client.sync_src_files] Deleted remote files: {files_del} => {f2del}")
+                    f2del = self.env["vanda.connector.file"].search([("vanda_connector_id", "=", vanda_connector.id), ("name", "in", files_del)])
+                    _logger.info(f"[vanda.connector.sync_src_files] Deleted remote files: {files_del} => {f2del}")
                     f2del.unlink()
                     pass
 
                 if files_update:
-                    f2update = self.env["vanda.client.file"].search([("vanda_client_id", "=", vanda_client.id), ("name", "in", files_update)])
+                    f2update = self.env["vanda.connector.file"].search([("vanda_connector_id", "=", vanda_connector.id), ("name", "in", files_update)])
                     for f2up in f2update:
-                        local_file_path = os.path.join(clients_dir, f2up.name)
+                        local_file_path = os.path.join(connectors_dir, f2up.name)
                         local_file_md5_hash = calculate_md5(file_path=local_file_path)
                         updated_file_names = []
                         if local_file_md5_hash == f2up.md5_hash:
@@ -206,7 +206,7 @@ class VandaClient(models.Model):
                                 "is_template": is_jinja2_template(file_path=local_file_path)[0],
                             })
                             updated_file_names.append(f2up.name)
-                        _logger.info(f"[vanda.client.sync_src_files] Updated remote files: {updated_file_names}")
+                        _logger.info(f"[vanda.connector.sync_src_files] Updated remote files: {updated_file_names}")
                         pass
                     pass
                 pass
